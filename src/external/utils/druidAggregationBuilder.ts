@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2019 Imply Data, Inc.
+ * Copyright 2016-2020 Imply Data, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -299,9 +299,9 @@ export class DruidAggregationBuilder {
           aggregation = {
             name: forceFinalize ? tempName : name,
             type: "hyperUnique",
-            fieldName: attributeName
+            fieldName: attributeName,
+            round: true
           };
-          if (!this.versionBefore('0.10.1')) aggregation.round = true;
           if (forceFinalize) {
             postAggregations.push({
               type: 'finalizingFieldAccess',
@@ -347,9 +347,9 @@ export class DruidAggregationBuilder {
           aggregation = {
             name: forceFinalize ? tempName : name,
             type: "cardinality",
-            fields: [attributeName]
+            fields: [attributeName],
+            round: true
           };
-          if (!this.versionBefore('0.10.1')) aggregation.round = true;
           if (forceFinalize) {
             postAggregations.push({
               type: 'finalizingFieldAccess',
@@ -376,9 +376,9 @@ export class DruidAggregationBuilder {
             dimension: cardinalityExpression.getFreeReferences()[0],
             extractionFn: druidExtractionFnBuilder.expressionToExtractionFn(cardinalityExpression)
           };
-        })
+        }),
+        round: true
       };
-      if (!this.versionBefore('0.10.1')) aggregation.round = true;
 
       if (cardinalityExpressions.length > 1) aggregation.byRow = true;
     }

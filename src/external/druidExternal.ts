@@ -1,6 +1,6 @@
 /*
  * Copyright 2012-2015 Metamarkets Group Inc.
- * Copyright 2015-2019 Imply Data, Inc.
+ * Copyright 2015-2020 Imply Data, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ import * as toArray from 'stream-to-array';
 import { AttributeInfo, Attributes, Dataset, Datum, PlywoodRange, Range, Set, TimeRange } from '../datatypes/index';
 import {
   $,
+  r,
   ApplyExpression,
   CardinalityExpression,
   ChainableExpression,
@@ -773,7 +774,7 @@ export class DruidExternal extends External {
     let label = split.firstSplitName();
 
     // Can it be a time series?
-    if (!this.limit && DruidExternal.isTimestampCompatibleSort(this.sort, label)) {
+    if (!this.limit && DruidExternal.isTimestampCompatibleSort(this.sort, label) && leftoverHavingFilter.equals(Expression.TRUE)) {
       let granularityInflater = this.splitExpressionToGranularityInflater(splitExpression, label);
       if (granularityInflater) {
         return {
@@ -954,12 +955,25 @@ export class DruidExternal extends External {
             );
             outerAttributes.push(AttributeInfo.fromJS({ name: newName, type: 'NUMBER' }));
 
-            return resplit.resplitAgg.substitute((ex) => {
+            let resplitAggWithUpdatedNames = resplit.resplitAgg.substitute((ex) => {
               if (ex instanceof RefExpression && ex.name === oldName) {
                 return ex.changeName(newName);
               }
               return null;
-            });
+            }) as ChainableExpression;
+
+            // If there is a filter defined on the inner agg then we need to filter the outer aggregate to only the buckets that have a non-zero count with said filter.
+            if (resplit.resplitApply.expression instanceof ChainableExpression && resplit.resplitApply.expression.operand instanceof FilterExpression) {
+              const filterExpression = resplit.resplitApply.expression.operand;
+              const definedFilterName = newName + '_def';
+              innerApplies.push(
+                $('_').apply(definedFilterName, filterExpression.count())
+              );
+              outerAttributes.push(AttributeInfo.fromJS({ name: definedFilterName, type: 'NUMBER' }));
+              resplitAggWithUpdatedNames = resplitAggWithUpdatedNames.changeOperand($('_').filter($(definedFilterName).greaterThan(r(0))));
+            }
+
+            return resplitAggWithUpdatedNames;
           } else {
             const tempName = `a${i}_${c++}`;
             innerApplies.push(Expression._.apply(tempName, ex));
@@ -1230,6 +1244,14 @@ export class DruidExternal extends External {
         druidQuery.resultFormat = 'compactedList';
         if (virtualColumns.length) druidQuery.virtualColumns = virtualColumns;
         druidQuery.columns = columns;
+
+        if (sort && sort.refName() === this.timeAttribute && this.select.attributes.includes(this.timeAttribute)) {
+          (druidQuery as any).order = sort.direction; // ToDo: update Druid types
+          if (!druidQuery.columns.includes('__time')) {
+            druidQuery.columns = druidQuery.columns.concat(['__time']);
+          }
+        }
+
         if (limit) druidQuery.limit = limit.value;
 
         return {
@@ -1555,7 +1577,7 @@ export class DruidExternal extends External {
     if (filterV0.start < filterV1.start) appliesByTimeFilterValue.reverse();
 
     // Check for timeseries decomposition
-    if (splitExpression instanceof TimeBucketExpression && (!this.sort || this.sortOnLabel()) && !this.limit) {
+    if (splitExpression instanceof TimeBucketExpression) {
       const fallbackExpression = splitExpression.operand;
       if (fallbackExpression instanceof FallbackExpression) {
         const timeShiftExpression = fallbackExpression.expression;
@@ -1568,11 +1590,15 @@ export class DruidExternal extends External {
             external1Value.filter = $(timeAttribute, 'TIME').overlap(appliesByTimeFilterValue[0].filterValue).and(external1Value.filter).simplify();
             external1Value.split = simpleSplit;
             external1Value.applies = appliesByTimeFilterValue[0].unfilteredApplies;
+            external1Value.limit = null; // Remove limit and sort
+            external1Value.sort = null;  // So we get a timeseries
 
             const external2Value = this.valueOf();
             external2Value.filter = $(timeAttribute, 'TIME').overlap(appliesByTimeFilterValue[1].filterValue).and(external2Value.filter).simplify();
             external2Value.split = simpleSplit;
             external2Value.applies = appliesByTimeFilterValue[1].unfilteredApplies;
+            external2Value.limit = null;
+            external2Value.sort = null;
 
             return {
               external1: new DruidExternal(external1Value),
@@ -1651,7 +1677,20 @@ export class DruidExternal extends External {
               }, 'TIME_RANGE');
             }
 
-            return ds1.fullJoin(ds2, (a: TimeRange, b: TimeRange) => a.start.valueOf() - b.start.valueOf());
+            let joined = ds1.fullJoin(ds2, (a: TimeRange, b: TimeRange) => a.start.valueOf() - b.start.valueOf());
+
+            // Apply sort and limit
+            const mySort = this.sort;
+            if (mySort && !(this.sortOnLabel() && mySort.direction === 'ascending')) {
+              joined = joined.sort(mySort.expression, mySort.direction);
+            }
+
+            const myLimit = this.limit;
+            if (myLimit) {
+              joined = joined.limit(myLimit.value);
+            }
+
+            return joined;
           })
         );
       }

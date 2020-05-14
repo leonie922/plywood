@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2019 Imply Data, Inc.
+ * Copyright 2016-2020 Imply Data, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -89,7 +89,7 @@ export class TimeShiftExpression extends ChainableExpression implements HasTimez
   }
 
   protected _getSQLChainableHelper(dialect: SQLDialect, operandSQL: string): string {
-    return dialect.timeShiftExpression(operandSQL, this.duration, this.getTimezone());
+    return dialect.timeShiftExpression(operandSQL, this.duration, this.step, this.getTimezone());
   }
 
   protected changeStep(step: int): Expression {

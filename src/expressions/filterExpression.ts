@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2019 Imply Data, Inc.
+ * Copyright 2016-2020 Imply Data, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ import { Dataset, PlywoodValue } from '../datatypes/index';
 import { SQLDialect } from '../dialect/baseDialect';
 import { ApplyExpression } from './applyExpression';
 import { ChainableUnaryExpression, Expression, ExpressionJS, ExpressionValue } from './baseExpression';
+import { LiteralExpression } from './literalExpression';
 import { RefExpression } from './refExpression';
 import { SortExpression } from './sortExpression';
 import { SplitExpression } from './splitExpression';
@@ -42,6 +43,9 @@ export class FilterExpression extends ChainableUnaryExpression {
   }
 
   protected _getSQLChainableUnaryHelper(dialect: SQLDialect, operandSQL: string, expressionSQL: string): string {
+    if (this.expression instanceof RefExpression) {
+      expressionSQL = `(${expressionSQL} = TRUE)`;
+    }
     return `${operandSQL} WHERE ${expressionSQL}`;
   }
 

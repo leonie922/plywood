@@ -1,5 +1,25 @@
 # Change Log
 
+## 0.21.7
+
+- Updated Druid SQL driver to be up to date with latest Druid
+
+## 0.21.6
+
+- Better decomposition for time compare
+
+## 0.21.5
+
+- Fix bug when having filter was being swallowed for the timeseries
+
+## 0.21.4
+
+- Fix filtering for filtered averages in resplit queries 
+
+## 0.21.3
+
+- Better handle `undefined` in druid groupBys
+
 ## 0.21.2
 
 - Add `rebaseOnStart` to `Range`

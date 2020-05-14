@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2019 Imply Data, Inc.
+ * Copyright 2016-2020 Imply Data, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -402,16 +402,7 @@ export class DruidExtractionFnBuilder {
     }
 
     if (fallback instanceof LiteralExpression) {
-      return DruidExtractionFnBuilder.composeFns(this.expressionToExtractionFnPure(operand), {
-        type: "lookup",
-        retainMissingValue: true,
-        lookup: {
-          type: "map",
-          map: {
-            "": fallback.value
-          }
-        }
-      });
+      throw new Error(`cant handle direct fallback: ${expression}`);
 
     }
 
